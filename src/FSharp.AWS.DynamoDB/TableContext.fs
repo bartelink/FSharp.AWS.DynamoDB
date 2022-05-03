@@ -209,22 +209,38 @@ type private LimitType =
     static member AllOrCount (l : int option) = l |> Option.map Count |> Option.defaultValue All
     static member DefaultOrCount (l : int option) = l |> Option.map Count |> Option.defaultValue Default
 
-/// <summary>Represents an individual request that can be included in the <c>TransactItems</c> of a <c>TransactWriteItems</c> call</summary>
+/// <summary>Represents an individual request that can be included in the <c>TransactItems</c> of a <c>TransactWriteItems</c> call.</summary>
 [<RequireQualifiedAccess>]
 type TransactWrite<'TRecord> =
-    | Put    of item : 'TRecord                                       * precondition : ConditionExpression<'TRecord> option
-    | Update of key : TableKey * updater : UpdateExpression<'TRecord> * precondition : ConditionExpression<'TRecord> option
-    | Delete of key : TableKey                                        * precondition : ConditionExpression<'TRecord> option
+    /// Specify a Check to be run on a specified item.
+    /// If the condition does not hold, the overall TransactWriteItems request will be Canceled.
+    | Check  of key : TableKey  * condition : ConditionExpression<'TRecord>
+    /// Specify a PutItem operation to be performed, inserting or replacing an item in the Table.
+    /// If the (optional) precondition does not hold, the overall TransactWriteItems request will be Canceled.
+    | Put    of item : 'TRecord * precondition : ConditionExpression<'TRecord> option
+    /// Specify an UpdateItem operation to be performed, applying an updater expression on the item identified by the specified `key`, if it exists.
+    /// If the item exists and the (optional) precondition does not hold, the overall TransactWriteItems request will be Canceled.
+    | Update of key : TableKey  * precondition : ConditionExpression<'TRecord> option   * updater : UpdateExpression<'TRecord>
+    /// Specify a DeleteItem operation to be performed, removing the item identified by the specified `key` if it exists.
+    /// If the item exists and the (optional) precondition does not hold, the overall TransactWriteItems request will be Canceled.
+    | Delete of key : TableKey  * precondition : ConditionExpression<'TRecord> option
+
 /// Helpers for building a <c>TransactWriteItemsRequest</c> to supply to <c>TransactWriteItems</c>
 module TransactWriteItemsRequest =
+
     let private toTransactWriteItem<'TRecord> tableName (template : RecordTemplate<'TRecord>) : TransactWrite<'TRecord> -> TransactWriteItem = function
+        | TransactWrite.Check (key, cond) ->
+            let req = ConditionCheck(TableName = tableName, Key = template.ToAttributeValues key)
+            let writer = AttributeWriter(req.ExpressionAttributeNames, req.ExpressionAttributeValues)
+            req.ConditionExpression <- cond.Conditional.Write writer
+            TransactWriteItem(ConditionCheck = req)
         | TransactWrite.Put (item, maybeCond) ->
             let req = Put(TableName = tableName, Item = template.ToAttributeValues item)
             maybeCond |> Option.iter (fun cond ->
                 let writer = AttributeWriter(req.ExpressionAttributeNames, req.ExpressionAttributeValues)
                 req.ConditionExpression <- cond.Conditional.Write writer)
             TransactWriteItem(Put = req)
-        | TransactWrite.Update (key, updater, maybeCond) ->
+        | TransactWrite.Update (key, maybeCond, updater) ->
             let req = Update(TableName = tableName, Key = template.ToAttributeValues key)
             let writer = AttributeWriter(req.ExpressionAttributeNames, req.ExpressionAttributeValues)
             req.UpdateExpression <- updater.UpdateOps.Write(writer)
@@ -244,6 +260,7 @@ module TransactWriteItemsRequest =
 
 /// Helpers for identifying Failed Precondition check outcomes emanating from <c>PutItem</c>, <c>UpdateItem</c> or <c>DeleteItem</c>
 module Precondition =
+
     /// <summary>Exception filter to identify whether an individual (non-transactional) <c>PutItem</c>, <c>UpdateItem</c> or <c>DeleteItem</c> call's <c>precondition</c> check failing.</summary>
     let (|CheckFailed|_|) : exn -> unit option = function
         | :? ConditionalCheckFailedException -> Some ()
@@ -764,8 +781,9 @@ type TableContext<'TRecord> internal
 
 
     /// <summary>
-    ///     Atomically applies a set of 1-25 write operations to the table.
+    ///     Atomically applies a set of 1-25 write operations to the table.<br/>
     ///     NOTE requests are charged at twice the normal rate in Write Capacity Units.
+    ///     See the DynamoDB <a href="https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html"><c>TransactWriteItems</c> API documentation</a> for full details of semantics and charges.<br/>
     /// </summary>
     /// <param name="items">Operations to be performed.<br/>
     /// Use <c>TransactWriteItemsRequest.TransactionCanceledConditionalCheckFailed</c> to identify any Precondition Check failures.</param>
