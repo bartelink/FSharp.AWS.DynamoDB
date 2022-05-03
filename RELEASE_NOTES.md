@@ -1,3 +1,6 @@
+### 0.11.0-beta
+* Add `Precondition.CheckFailed`
+
 ### 0.10.1-beta
 * Fixed accidentally removed/renamed legacy factory methods (`TableContext.Create`/`TableContext.CreateAsync`) 
 
