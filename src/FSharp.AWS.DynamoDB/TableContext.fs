@@ -183,7 +183,7 @@ module internal Provisioning =
         run (client, tableName, template) None
 
 /// Represents the operation performed on the table, for metrics collection purposes
-type Operation = GetItem | PutItem | UpdateItem | DeleteItem | BatchGetItems | BatchWriteItems | Scan | Query
+type Operation = GetItem | PutItem | UpdateItem | DeleteItem | BatchGetItems | BatchWriteItems | TransactWriteItems | Scan | Query
 
 /// Represents metrics returned by the table operation, for plugging in to an observability framework
 type RequestMetrics =
@@ -208,6 +208,39 @@ type private LimitType =
         | Default -> false
     static member AllOrCount (l : int option) = l |> Option.map Count |> Option.defaultValue All
     static member DefaultOrCount (l : int option) = l |> Option.map Count |> Option.defaultValue Default
+
+/// <summary>Represents an individual request that can be included in the <c>TransactItems</c> of a <c>TransactWriteItems</c> call</summary>
+[<RequireQualifiedAccess>]
+type TransactWrite<'TRecord> =
+    | Put    of item : 'TRecord                                       * precondition : ConditionExpression<'TRecord> option
+    | Update of key : TableKey * updater : UpdateExpression<'TRecord> * precondition : ConditionExpression<'TRecord> option
+    | Delete of key : TableKey                                        * precondition : ConditionExpression<'TRecord> option
+/// Helpers for building a <c>TransactWriteItemsRequest</c> to supply to <c>TransactWriteItems</c>
+module TransactWriteItemsRequest =
+    let private toTransactWriteItem<'TRecord> tableName (template : RecordTemplate<'TRecord>) : TransactWrite<'TRecord> -> TransactWriteItem = function
+        | TransactWrite.Put (item, maybeCond) ->
+            let req = Put(TableName = tableName, Item = template.ToAttributeValues item)
+            maybeCond |> Option.iter (fun cond ->
+                let writer = AttributeWriter(req.ExpressionAttributeNames, req.ExpressionAttributeValues)
+                req.ConditionExpression <- cond.Conditional.Write writer)
+            TransactWriteItem(Put = req)
+        | TransactWrite.Update (key, updater, maybeCond) ->
+            let req = Update(TableName = tableName, Key = template.ToAttributeValues key)
+            let writer = AttributeWriter(req.ExpressionAttributeNames, req.ExpressionAttributeValues)
+            req.UpdateExpression <- updater.UpdateOps.Write(writer)
+            maybeCond |> Option.iter (fun cond -> req.ConditionExpression <- cond.Conditional.Write writer)
+            TransactWriteItem(Update = req)
+        | TransactWrite.Delete (key, maybeCond) ->
+            let req = Delete(TableName = tableName, Key = template.ToAttributeValues key)
+            maybeCond |> Option.iter (fun cond ->
+                let writer = AttributeWriter(req.ExpressionAttributeNames, req.ExpressionAttributeValues)
+                req.ConditionExpression <- cond.Conditional.Write writer)
+            TransactWriteItem(Delete = req)
+    let internal toTransactItems<'TRecord> tableName template items = Seq.map (toTransactWriteItem<'TRecord> tableName template) items |> rlist
+    /// <summary>Exception filter to identify whether a <c>TransactWriteItems</c> call has failed due to one or more of the supplied <c>precondition</c> checks failing.</summary>
+    let (|TransactionCanceledConditionalCheckFailed|_|) : exn -> unit option = function
+        | :? TransactionCanceledException as e when e.CancellationReasons.Exists(fun x -> x.Code = "ConditionalCheckFailed") -> Some ()
+        | _ -> None
 
 /// Helpers for identifying Failed Precondition check outcomes emanating from <c>PutItem</c>, <c>UpdateItem</c> or <c>DeleteItem</c>
 module Precondition =
@@ -727,6 +760,25 @@ type TableContext<'TRecord> internal
             failwithf "BatchWriteItem deletion request returned error %O" response.HttpStatusCode
 
         return unprocessed |> Array.map template.ExtractKey
+    }
+
+
+    /// <summary>
+    ///     Atomically applies a set of 1-25 write operations to the table.
+    ///     NOTE requests are charged at twice the normal rate in Write Capacity Units.
+    /// </summary>
+    /// <param name="items">Operations to be performed.<br/>
+    /// Use <c>TransactWriteItemsRequest.TransactionCanceledConditionalCheckFailed</c> to identify any Precondition Check failures.</param>
+    /// <param name="clientRequestToken">The <c>ClientRequestToken</c> to supply as an idempotency key (10 minute window).</param>
+    member _.TransactWriteItems(items : seq<TransactWrite<'TRecord>>, ?clientRequestToken) : Async<unit> = async {
+        let reqs = TransactWriteItemsRequest.toTransactItems tableName template items
+        let req = TransactWriteItemsRequest(ReturnConsumedCapacity = returnConsumedCapacity, TransactItems = reqs)
+        clientRequestToken |> Option.iter (fun x -> req.ClientRequestToken <- x)
+        let! ct = Async.CancellationToken
+        let! response = client.TransactWriteItemsAsync(req, ct) |> Async.AwaitTaskCorrect
+        maybeReport |> Option.iter (fun r -> r TransactWriteItems (Seq.toList response.ConsumedCapacity) reqs.Count)
+        if response.HttpStatusCode <> HttpStatusCode.OK then
+            failwithf "TransactWriteItems request returned error %O" response.HttpStatusCode
     }
 
 
