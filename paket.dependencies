@@ -1,33 +1,28 @@
 source https://api.nuget.org/v3/index.json
 
 storage: none
-framework: net50, netstandard20, netstandard21
+framework: net80, netstandard20, netstandard21
+
+# copy_local: true because this is a build-time dependency only
+nuget Dotnet.ReproducibleBuilds copy_local: true
 
 nuget Unquote ~> 6.1.0
-nuget FSharp.Core >= 4.7.2 lowest_matching: true
-nuget Expecto
-nuget FsCheck 2.14.3
-nuget Expecto.FsCheck
 
-nuget AWSSDK.DynamoDBv2 ~> 3.7.0
-github eiriktsarpalis/TypeShape:2.16 src/TypeShape/TypeShape.fs
+# NOTE re `content: false`
+# Workaround for malformed FSharp.Core packages https://github.com/dotnet/fsharp/issues/12706 via https://github.com/fsprojects/Paket/issues/4149
+# Removal triggers issues in dotnet publish, e.g. for Lambda projects
+# Also avoids Rider search finding stuff in FSharp.Core.xml
+nuget FSharp.Core >= 4.7.2 content: false, lowest_matching: true
 
-group Build
-  source https://api.nuget.org/v3/index.json
+nuget AWSSDK.DynamoDBv2 ~> 3.7.5
 
-  framework: netstandard2.0
-  storage: none
-  
-  nuget Fake.Core.Target
-  nuget Fake.Core.Process
-  nuget Fake.DotNet.Cli
-  nuget Fake.Core.ReleaseNotes
-  nuget Fake.DotNet.AssemblyInfoFile
-  nuget Fake.DotNet.Paket
-  nuget Fake.Tools.Git
-  nuget Fake.Core.Environment
-  nuget Fake.Core.UserInput
-  nuget Fake.IO.FileSystem
-  nuget Fake.DotNet.MsBuild
-  nuget Fake.Api.GitHub
-  nuget Octokit 0.48 // Temp fix for Fake build issue https://github.com/fsprojects/FAKE/issues/2601
+github eiriktsarpalis/TypeShape:10.0.0 src/TypeShape/TypeShape.fs
+
+group Test
+    source https://api.nuget.org/v3/index.json
+    framework: net80
+
+    nuget FsCheck
+    nuget Microsoft.NET.Test.Sdk
+    nuget xunit
+    nuget xunit.runner.visualstudio

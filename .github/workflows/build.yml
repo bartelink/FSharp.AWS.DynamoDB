@@ -7,13 +7,13 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        dotnet: ['5.0.x']
+        dotnet: ['9.0.x']
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Setup .NET Core
-      uses: actions/setup-dotnet@v1.7.2
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
       with:
         dotnet-version: ${{ matrix.dotnet }}
     - name: Restore tools
@@ -21,13 +21,13 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
     - name: Run build
-      run: dotnet fake build -t Build
+      run: dotnet fsi build.fsx -t Build
 
   test:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        dotnet: ['5.0.x']
+        dotnet: ['9.0.x']
     runs-on: ${{ matrix.os }}
 
     services:
@@ -37,9 +37,9 @@ jobs:
           - 8000:8000
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Setup .NET Core
-      uses: actions/setup-dotnet@v1.7.2
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
       with:
         dotnet-version: ${{ matrix.dotnet }}
     - name: Restore tools
@@ -47,4 +47,4 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
     - name: Run tests
-      run: dotnet fake build -t Test
+      run: dotnet fsi build.fsx -t Test

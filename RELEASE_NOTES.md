@@ -1,3 +1,58 @@
+### 0.12.3-beta
+* Removed erroneous `Dotnet.Reproduciblebuilds` dependency [#75](https://github.com/fsprojects/FSharp.AWS.DynamoDB/pull/75)
+### 0.12.2-beta
+* (breaking) Revised multi-table transaction API (thanks @bartelink)
+
+### 0.12.1-beta
+* Added support for `defaultArg` in update expressions on the same attribute, allowing SET if_not_exists semantics (eg { record with OptionalValue = Some (defaultArg record.OptionalValue "Default") })
+* Allow empty strings in non-key attributes (thanks @purkhusid)
+* Support multi-table transactions (thanks @purkhusid)
+
+### 0.12.0-beta
+* Added support for `Array.contains` and `List.contains` to compare an attribute against multiple values (thanks @faldor20)
+* Added `AllowMultiple = true` for `GlobalSecondaryIndex*` Attributes to allow indices to share an attribute
+* Modified index selection priority to better handle string `BeginsWith` queries on inverse GSIs (thanks @matti-avilabs)
+* Added `ReturnValuesOnConditionCheckFailure.ALL_OLD` to include the item values in the `ConditionCheckFailedException` (thanks for the suggestion @bartelink)
+* (breaking) Removed [obsolete](https://learn.microsoft.com/en-us/dotnet/core/compatibility/serialization/5.0/binaryformatter-serialization-obsolete) `BinaryFormatterAttribute`
+
+### 0.11.2-beta
+* Added optional `?consistentRead` parameter to Get requests (thanks @matti-avilabs)
+* Fixed `TransactWriteItems`: updated validation to reflect [increased limit of 100 items in service](https://aws.amazon.com/about-aws/whats-new/2022/09/amazon-dynamodb-supports-100-actions-per-transaction/)
+
+### 0.11.1-beta
+* Updated internal `TypeShape` dependency to 10.0.0
+* Updated internal `AwaitTaskCorrect` implementation to align with [canonical version](http://www.fssnip.net/7Rc/title/AsyncAwaitTaskCorrect) [#49](https://github.com/fsprojects/FSharp.AWS.DynamoDB/pull/49) 
+* Added SourceLink info (using `DotNet.ReproducibleBuilds`)
+* Fixed `TableContext.UpdateTableIfRequiredAsync`: Guard against `NullReferenceException` when `StreamSpecification` is `null`
+* (breaking) Changed `TableContext.UpdateTableIfRequiredAsync`/`VerifyOrCreateTableAsync` to yield `TableDescription` (in order to surface ARNs)
+
+### 0.11.0-beta
+* Added `Precondition.CheckFailed`
+* Added `TableContext.TransactWriteItems`, `TransactWrite` DU, `TransactWriteItemsRequest.TransactionCanceledConditionalCheckFailed`
+
+### 0.10.1-beta
+* Fixed accidentally removed/renamed legacy factory methods (`TableContext.Create`/`TableContext.CreateAsync`) 
+
+### 0.10.0-beta
+* Added `TableContext` constructor (replaces `TableContext.Create(verifyTable = false)`)
+* Added `TableContext.VerifyOrCreateTableAsync` (replaces `TableContext.VerifyTableAsync(createIfNotExists = true)`)
+* Added `TableContext.UpdateTableIfRequiredAsync` (conditional `UpdateTableAsync` to establish specified `throughput` or `streaming` only if required. Replaces `UpdateProvisionedThroughputAsync`)
+* Added `TableContext.Scripting.Initialize` (two overloads, replacing `TableContext.Create()` and `TableContext.Create(createIfNotExists = true)`)
+* Added `Throughput.OnDemand` mode (sets `BillingMode` to `PAY_PER_REQUEST`, to go with the existing support for configuring `PROVISIONED` and a `ProvisionedThroughput`)
+* Added ability to configure DynamoDB streaming (via a `Streaming` DU) to `VerifyOrCreateTableAsync` and `UpdateTableIfRequiredAsync` 
+* Obsoleted `TableContext.Create` (replace with `TableContext.Scripting.Initialize`, `TableContext.VerifyOrCreateTableAsync`, `TableContext.VerifyTableAsync`)
+* Obsoleted `TableContext.UpdateProvisionedThroughputAsync` (replace with `TableContext.UpdateTableIfRequiredAsync`)
+* (breaking) Obsoleted `TableContext.VerifyTableAsync` optional argument to create a Table (replace with `VerifyOrCreateTableAsync`)
+* (breaking) Changed `TableKeySchemata.CreateCreateTableRequest` to `ApplyToCreateTableRequest` (with minor signature change)
+* (breaking; reverted in `0.10.1`) Removed `TableContext.CreateAsync` (replace with `TableContext.VerifyTableAsync` or `VerifyOrCreateTableAsync`)
+
+### 0.9.4-beta
+* Moved Sync-over-Async versions of `TableContext` operations into `namespace FSharp.AWS.DynamoDB.Scripting`
+* Added `WithMetricsCollector()` copy method to allow separating metrics by context (eg by request)
+* Ensured metrics are reported even for failed requests
+* Added `TryGetItemAsync` (same as `GetItemAsync`, but returns `None`, instead of throwing, if an item is not present)
+* Switched test framework to Xunit, assertions to Unquote, runner to `dotnet test` 
+
 ### 0.9.3-beta
 * Added `RequestMetrics` record type
 * Added an optional `metricsCollector` parameter to `TableContext.Create` to receive operation metrics

@@ -1,4 +1,5 @@
-AWSSDK.DynamoDBv2
-Expecto
-Expecto.FsCheck
-FsCheck
+group Test
+    FsCheck
+    Microsoft.NET.Test.Sdk
+    xunit
+    xunit.runner.visualstudio
